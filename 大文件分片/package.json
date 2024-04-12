@@ -1,0 +1,23 @@
+{
+    "name": "large_file_upload",
+    "version": "1.0.0",
+    "description": "大文件分片上传（前端+nodejs服务端）",
+    "main": "server/index.js",
+    "scripts": {
+        "dev": "node server/index.js"
+    },
+    "keywords": [
+        "nodejs分片上传",
+        "分片上传"
+    ],
+    "author": "luochongfei",
+    "license": "MIT",
+    "dependencies": {
+        "express": "^4.19.2",
+        "multer": "1.4.5-lts.1"
+    },
+    "devDependencies": {
+        "fs-extra": "^11.2.0",
+        "opn": "^6.0.0"
+    }
+}

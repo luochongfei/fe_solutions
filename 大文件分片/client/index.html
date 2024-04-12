@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>大文件分片上传</title>
+    </head>
+    <body>
+        <div
+            style="
+                display: flex;
+                height: 80vh;
+                align-items: center;
+                justify-content: center;
+            "
+        >
+            <input type="file" id="myfile" onchange="handleFileSelect(this)" />
+        </div>
+        <dialog id="modal">分析文件中</dialog>
+        <script src="spark-md5.js"></script>
+        <script>
+            // 监听上传控件变化
+            async function handleFileSelect(oFile) {
+                const file = oFile.files[0];
+
+                // 分片
+                const chunks = splitFile(file, 5 * 1024 * 1024);
+
+                // 获取到文件MD5，用于服务端临时作为文件夹使用
+                const md5 = await getMD5(file);
+
+                // 将所有分片一个个上传
+                await uploadChunks(chunks, md5, file.name);
+            }
+
+            // 将文件夹MD5
+            async function getMD5(file) {
+                return new Promise((resolve, reject) => {
+                    modal.showModal();
+
+                    const fileReader = new FileReader();
+                    fileReader.onload = function (e) {
+                        const spark = new SparkMD5.ArrayBuffer();
+                        spark.append(e.target.result);
+
+                        const md5Str = spark.end();
+
+                        modal.close();
+
+                        return resolve(md5Str);
+                    };
+
+                    fileReader.readAsText(file);
+                });
+            }
+
+            // 前端分片关键代码
+            function splitFile(file, chunkSize = 1024 * 1024 * 5) {
+                // 文件总大小
+                const fileSize = file.size;
+
+                // 如果总大小小于分片大小，直接返回为1个
+                if (fileSize <= chunkSize) {
+                    return [file];
+                }
+
+                // 一共能分出的片
+                const chunkLength = Math.ceil(fileSize / chunkSize);
+
+                // 用于装片的容器
+                const chunks = [];
+
+                // 正式进入切片
+                for (let i = 0; i < chunkLength; i++) {
+                    const start = i * chunkSize;
+                    const end = Math.min(start + chunkSize, fileSize);
+
+                    // 文件切片关键代码
+                    chunks.push(file.slice(start, end));
+                }
+
+                return chunks;
+            }
+
+            // 循环将所有片进行上传
+            async function uploadChunks(chunks, md5, originFileName) {
+                for (let i = 0; i < chunks.length; i++) {
+                    await uploadSingleChunk(
+                        chunks[i],
+                        md5,
+                        i,
+                        chunks.length,
+                        originFileName
+                    );
+                }
+            }
+
+            // 单个片上传处理
+            async function uploadSingleChunk(
+                chunk,
+                md5,
+                index,
+                chunksLength,
+                originFileName
+            ) {
+                const formData = new FormData();
+
+                formData.append('file', chunk);
+                formData.append('md5', md5);
+                formData.append('index', index);
+                formData.append('chunksLength', chunksLength);
+                formData.append('originFileName', originFileName);
+
+                return sendFetch('/upload', {
+                    body: formData,
+                });
+            }
+
+            function sendFetch(
+                url = '',
+                { method = 'POST', body = null } = {}
+            ) {
+                if (!url) {
+                    return Promise.reject();
+                }
+
+                return fetch(url, {
+                    method: method,
+                    body,
+                })
+                    .then((res) => res.json())
+                    .then((data) => {
+                        if (data.over) {
+                            alert(data.msg);
+                            console.log(data.msg);
+                        } else {
+                            console.log(data.msg + ':' + data.chunk_index);
+                        }
+                    })
+                    .catch((err) => console.log(err));
+            }
+        </script>
+    </body>
+</html>
